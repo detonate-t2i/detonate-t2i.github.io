@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DETONATE: Text-to-Image Alignment and Kernelized DPO</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #ffffff;
+      color: #333333;
+      scroll-behavior: smooth;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px; 
+      margin-left: auto;
+      margin-right: auto;
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+    
+    /* Enhanced Header styling with proper title sizing */
+    h1 {
+      font-size: 4rem; /* Increased from 10rem which was too large */
+      font-weight: 800; /* Extra bold for better visibility */
+      margin-top: 2rem;
+      margin-bottom: 2rem;
+      color: #111827; /* Darker color for better contrast */
+      text-align: center;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+    }
+    
+    .authors {
+      text-align: center;
+      margin-bottom: 0.75rem;
+      font-size: 1.125rem;
+      color: #4b5563;
+    }
+    .authors .author-name {
+      color: #007bff;
+      text-decoration: none;
+      margin: 0 0.375rem;
+      font-weight: 500;
+    }
+    .authors .author-name:hover {
+      text-decoration: underline;
+    }
+    .equal-contrib {
+      color: #dc2626;
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+    
+    .affiliation {
+      text-align: center;
+      margin-bottom: 0.5rem;
+      font-size: 1rem;
+      color: #6b7280;
+      font-weight: 400;
+    }
+    
+    .conference-info {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      font-size: 1rem;
+      color: #6b7280;
+      font-weight: 500;
+    }
+
+    /* Button styling */
+    .action-buttons {
+        text-align: center;
+        margin-bottom: 3.5rem;
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+    }
+    .action-button {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.625rem 1.5rem;
+        border-radius: 0.375rem;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.9375rem;
+        transition: all 0.2s ease;
+        border: 1px solid;
+        min-width: 110px;
+        justify-content: center;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    .action-button svg {
+        margin-right: 0.375rem;
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+    .button-paper {
+        background-color: #343a40;
+        color: white;
+        border-color: #343a40;
+    }
+    .button-paper:hover {
+        background-color: #23272b;
+        border-color: #23272b;
+    }
+    .button-code {
+        background-color: #f8f9fa;
+        color: #343a40;
+        border-color: #ced4da;
+    }
+    .button-code:hover {
+        background-color: #e9ecef;
+        border-color: #adb5bd;
+    }
+    
+    /* Navigation Bar */
+    nav {
+        background-color: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-bottom: 1px solid #e5e7eb;
+        padding: 1rem 0;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        margin-bottom: 2rem; 
+    }
+    nav .container {
+        display: flex;
+        justify-content: center; 
+        align-items: center;
+        flex-wrap: wrap; 
+    }
+    nav a {
+        color: #374151;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        margin: 0 0.25rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    nav a:hover {
+        background-color: #eef2ff;
+        color: #3b82f6;
+    }
+
+    /* Section styling */
+    .section {
+      margin-top: 4rem;
+      margin-bottom: 4rem;
+    }
+    .section-title {
+      font-size: 2.25rem;
+      font-weight: 700;
+      color: #1f2937;
+      text-align: center;
+      margin-bottom: 3rem;
+      letter-spacing: -0.025em;
+    }
+    
+    .content-text {
+      font-size: 1.125rem;
+      color: #374151;
+      margin-bottom: 1.5rem;
+      text-align: justify;
+      line-height: 1.7;
+    }
+    .content-text strong {
+        color: #1f2937;
+        font-weight: 600;
+    }
+    .content-text ul, .content-text ol {
+        margin-left: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .content-text li {
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Image styling */
+    .image-display img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.75rem;
+      border: 1px solid #e5e7eb;
+      margin-left: auto;
+      margin-right: auto;
+      display: block;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .caption {
+      font-size: 1rem;
+      color: #6b7280;
+      margin-top: 1rem;
+      margin-bottom: 2rem;
+      text-align: center;
+      line-height: 1.5;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    /* Method section styling */
+    .method-subsection {
+      margin-top: 2.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .method-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 1rem;
+    }
+    
+    /* Results styling */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+    
+    /* Comparison grid */
+    .comparison-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+    .comparison-item {
+        text-align: center;
+        background: #f9fafb;
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        border: 1px solid #e5e7eb;
+    }
+    .comparison-item img {
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        width: 100%;
+        height: auto;
+    }
+    .comparison-item p {
+        font-size: 0.9rem;
+        color: #4b5563;
+        margin-bottom: 0.5rem;
+    }
+    .comparison-label {
+        font-weight: 600;
+        font-size: 1rem;
+    }
+    .chosen-label {
+        color: #059669;
+    }
+    .rejected-label {
+        color: #dc2626;
+    }
+    
+    /* Advisory styling */
+    .advisory {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 2px solid #f59e0b;
+        color: #92400e;
+        padding: 1.5rem 2rem;
+        border-radius: 0.75rem;
+        text-align: center;
+        margin: 3rem 0;
+        font-weight: 500;
+    }
+    .advisory strong {
+        font-weight: 700;
+        color: #78350f;
+    }
+
+    /* BibTeX styling */
+    pre {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 1.5rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      font-size: 0.9rem;
+      color: #1e293b;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+    
+    /* Footer styling */
+    .footer {
+        text-align: center;
+        margin-top: 5rem;
+        padding-top: 3rem;
+        border-top: 2px solid #e5e7eb;
+        font-size: 0.9rem;
+        color: #6b7280;
+    }
+    .author-name-static {
+      color: #444;
+      font-weight: 500;
+      margin: 0 0.375rem;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        h1 {
+            font-size: 2.5rem; /* Adjusted for mobile but still prominent */
+            padding: 0 1rem; /* Add padding to prevent text cutoff */
+        }
+        .container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        .action-buttons {
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .comparison-grid {
+            grid-template-columns: 1fr;
+        }
+        nav .container {
+            justify-content: space-around; 
+        }
+        nav a {
+            padding: 0.5rem 0.5rem; 
+            margin: 0.25rem;
+            font-size: 0.875rem; 
+        }
+    }
+    
+    /* Desktop specific enhancements */
+    @media (min-width: 1024px) {
+        h1 {
+            font-size: 4.5rem; /* Even larger on desktop */
+        }
+    }
+    
+    @media (min-width: 1280px) {
+        h1 {
+            font-size: 5rem; /* Maximum size for very large screens */
+        }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="section">
+      <!-- Replace the <h1>...</h1> with your PNG image -->
+      <img 
+        src="download (14).png" 
+        alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+        style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto;" 
+      />
+      <div class="authors">
+        <span class="author-name-static">Renjith Prasad</span><span class="equal-contrib">*</span>,
+        <span class="author-name-static">Abhilekh Borah</span><span class="equal-contrib">*</span>,
+        <span class="author-name-static">Hasnat Md Abdullah</span><span class="equal-contrib">*</span>,
+        <span class="author-name-static">Chathurangi Shyalika,</span>
+        <span class="author-name-static">Gurpreet Singh,</span>
+        <span class="author-name-static">Ritvik Garimella,</span>
+        <span class="author-name-static">Rajarshi Roy,</span>
+        <span class="author-name-static">Harshul Surana,</span>
+        <span class="author-name-static">Nasrin Imanpour,</span>
+        <span class="author-name-static">Suranjana Trivedy,</span>
+        <span class="author-name-static">Amit Sheth,</span>
+        <span class="author-name-static">Amitava Das</span>
+      </div>
+      <div class="affiliation">
+        AI Institute, University of South Carolina, USA<br>
+        <span class="equal-contrib">*: equal contribution</span>
+      </div>
+      <!-- <div class="conference-info">
+        Under Review at the 39th Conference on Neural Information Processing Systems (NeurIPS 2025)
+      </div> -->
+      <div class="action-buttons">
+        <a href="YOUR_PAPER_PDF_LINK_HERE" target="_blank" rel="noopener noreferrer" class="action-button button-paper">
+          <svg fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path></svg>
+          Paper
+        </a>
+        <a href="https://github.com/abhilekhborah/Detonate" target="_blank" rel="noopener noreferrer" class="action-button button-code">
+          <svg fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 01-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+          Code
+        </a>
+      </div>
+    </header>
+
+    <!-- <nav>
+      <div class="container">
+        <a href="#abstract">Abstract</a>
+        <a href="#introduction">Introduction</a>
+        <a href="#benchmark-details">DETONATE Benchmark</a>
+        <a href="#method-dpo-kernels">DPO-Kernels</a>
+        <a href="#method-aqi">AQI Metric</a>
+        <a href="#results-main">Results</a>
+        <a href="#visual-examples">Visuals</a>
+        <a href="#conclusion">Conclusion</a>
+        <a href="#discussion-limitations">Discussion</a>
+        <a href="#bibtex">BibTeX</a>
+      </div>
+    </nav> -->
+
+    <main>
+      <section id="teaser" class="section image-display">
+        <div class="image-display">
+          <img 
+            src="download (15).png" 
+            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+            style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.08);" 
+          />
+          <p class="caption"><strong>Figure 1: Text-to-Image Alignment under Hateful Prompts: A Visual and Latent Space Comparison across Race, Disability, and Gender Axes. </strong> This figure compares four models: Vanilla SD-XL, SD-XL + DDPO, SAFREE, and SD-XL + DPO-Kernel (Ours), under toxic prompt conditions. Visually (left), DPO-Kernel generates respectful and non-provocative images, neutralizing bias where prior methods fail. For gender prompts, red masks are manually overlaid to indicate nudity missed by other methods. Latently (right), embeddings across Epochs 0, 10, and 20 show that DPO-Kernel achieves clearer separation between hateful and non-hateful samples than DDPO. These results support our core claim: alignment is best achieved through structural regularization in representation space, not post hoc filtering.</p>
+        </div>
+      </section>
+
+      <section class="advisory">
+        <strong>Content Advisory:</strong> This paper includes material that may be disturbing or offensive to some readers, including depictions of violence, sexually explicit imagery, and harmful stereotypes or behaviors.
+      </section>
+
+      <section id="abstract" class="section">
+        <h2 class="section-title">Abstract</h2>
+        <div class="content-text">
+          <p style="text-align: justify; color: #555; font-family: sans-serif;">
+            Alignment is crucial for text-to-image (T2I) models to ensure that the generated images faithfully capture user intent while maintaining safety and fairness. <strong>Direct Preference Optimization (DPO)</strong> has emerged as a key alignment technique for large language models (LLMs), and its influence is now extending to T2I systems. This paper introduces <strong>DPO-Kernels for T2I models</strong>, a novel extension of DPO that enhances alignment across three key dimensions: (i) <strong>Hybrid Loss</strong>, which integrates embedding-based objectives with the traditional probability-based loss to improve optimization; (ii) <strong>Kernelized Representations</strong>, leveraging <strong>Radial Basis Function (RBF)</strong>, <strong>Polynomial</strong>, and <strong>Wavelet</strong> kernels to enable richer feature transformations, ensuring better separation between safe and unsafe inputs; and (iii) <strong>Divergence Selection</strong>, expanding beyond DPO's default <strong>Kullback–Leibler (KL)</strong> regularizer by incorporating alternative divergence measures such as <strong>Wasserstein</strong> and <strong>Rényi</strong> divergences to enhance stability and robustness in alignment training as shown in Fig. 1. We introduce <strong>DETONATE</strong>, the first large-scale benchmark of its kind, comprising approximately 100K curated image pairs, categorized as <em>chosen</em> and <em>rejected</em>. This benchmark encapsulates three critical axes of social bias and discrimination: <strong>Race</strong>, <strong>Gender</strong>, and <strong>Disability</strong>. The prompts are sourced from the <em>hate speech datasets</em>, while the images are generated using state-of-the-art T2I models, including Stable Diffusion 3.5 Large (SD-3.5), Stable Diffusion XL (SD-XL), and Midjourney. Furthermore, to evaluate alignment beyond surface metrics, we introduce the <strong>Alignment Quality Index (AQI)</strong>: a novel geometric measure that quantifies latent space separability of safe/unsafe image activations, revealing hidden model vulnerabilities. While alignment techniques often risk overfitting, we empirically demonstrate that <strong>DPO-Kernels</strong> preserve strong generalization bounds using the theory of <strong>Heavy-Tailed Self-Regularization (HT-SR)</strong>.
+          </p>
+        </div>
+      </section>
+
+      <section id="benchmark-details" class="section">
+        <h2 class="section-title">The DETONATE Benchmark</h2>
+        <p class="content-text">We introduce <strong>DETONATE</strong>, a large-scale benchmark designed to stress-test alignment in T2I models through fine-grained, adversarial evaluation. It comprises approximately 25K prompts from English Hate Speech Superset and UCB Hate Speech datasets, focusing on Race, Gender, and Disability. For each prompt, ten diverse images are generated using SoTA models (SD-XL, SD-3.5 Large, Midjourney), from which one chosen (non-hateful) and one rejected (hateful) image are selected via a human-in-the-loop semi-automated technique (LLaVA-family VLMs + human annotators, Cohen's κ=0.86), yielding ~100K curated image pairs.</p>
+        <div class="image-display">
+          <img 
+            src="download (16).png" 
+            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+            style="
+              display: block;
+              margin: 2rem auto;
+              max-width: 1000px;
+              width: 100%;
+              height: auto;
+              border-radius: 0.75rem;
+              box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+              object-fit: cover;
+              object-position: center;
+              aspect-ratio: 16 / 9;
+              height: 580px; /* Adjust as needed to simulate the trim */
+            " 
+          />
+          <p class="caption"><strong>Figure 2: DETONATE Benchmark Curation Framework.</strong> Illustrating the three-stage pipeline: (i) Collection of hate speech prompts, (ii) Image Generation using T2I models, and (iii) Annotation using VLMs and human verification to form chosen/rejected pairs.</p>
+        </div>
+      </section>
+
+      <section id="method-dpo-kernels" class="section">
+        <h2 class="section-title">DPO-Kernels</h2>
+        <p class="content-text">Direct extensions of DPO to T2I diffusion models falter due to reliance on scalar likelihoods, ignoring underlying semantic geometry. We introduce <strong>DPO-Kernels</strong>, a grounded extension of DPO that embeds alignment within the structure of a Reproducing Kernel Hilbert Space (RKHS). Unlike standard DPO, DPO-Kernels leverages kernel methods (Polynomial, RBF, Wavelet) to modulate updates via semantic proximity in embedding space, resulting in a smooth, geometry-aware preference function over latent manifolds. The choice of kernel (Polynomial, RBF, Wavelet) governs the inductive bias, shaping how alignment signals generalize. Polynomial kernels capture global nonlinear interactions. RBF kernels induce local smoothness and semantic clustering. Wavelet kernels combine spatial localization with frequency sensitivity, ideal for T2I alignment where fidelity varies across semantic scales.</p>
+        <div class="image-display">
+          <img 
+            src="download (18).png" 
+            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+            style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.08);" 
+          />
+          <p class="caption"><strong>Figure 3: Effect of Kernelization on DPO Loss Landscapes.</strong> Illustrates how Vanilla DPO, Polynomial, RBF, and Wavelet kernels induce different alignment surfaces.</p>
+        </div>
+        <div class="image-display mt-8">
+          <img 
+            src="download (17).png" 
+            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+            style="
+              display: block;
+              margin: 2rem auto;
+              max-width: 1000px;
+              width: 100%;
+              height: auto;
+              border-radius: 0.75rem;
+              box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+              object-fit: cover;
+              object-position: center;
+              aspect-ratio: 16 / 9;
+              height: 480px; /* Adjust as needed to simulate the trim */
+            "  
+          />
+          <p class="caption"><strong>Figure 4:</strong>
+            Overview of the proposed DPO-Kernel method applied to diffusion models. The model receives a textual prompt x, a preferred image sample y+, and a non-preferred image sample y−. Through a gradual denoising process, the diffusion model is optimized using a composite gradient objective that combines a kernelized preference score with a diffusion denoising regularizer. This encourages generation of preferred outputs while preserving denoising fidelity.</p>
+        </div>
+      </section>
+
+      <section id="method-aqi" class="section">
+        <h2 class="section-title">Alignment Quality Index (AQI)</h2>
+        <p class="content-text">
+          Behavioral alignment can be fragile. We propose that true alignment manifests in the model's internal geometry: safe and unsafe inputs should be encoded in representationally distinct ways. The <strong>Alignment Quality Index (AQI)</strong> is a geometry-aware, intrinsic metric evaluating how effectively a model separates safe from unsafe prompts within its latent space. It addresses the blind spot where behavioral safety can coexist with representational misalignment. AQI uses two geometry-based metrics:
+        </p>
+        <ul class="list-disc list-inside content-text pl-4 space-y-1">
+          <li><strong>Davies-Bouldin Score (DBS):</strong> Lower values mean better cluster separation.</li>
+          <li><strong>Dunn Index (DI):</strong> Higher values mean better separation and compactness.</li>
+        </ul>
+        <p class="content-text">
+          AQI combines these scores to give a single value: higher AQI means safer and clearer separation in the model's latent space.
+        </p>
+        <div class="image-display mt-6">
+          <img 
+            src="download (20).png" 
+            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+            style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.08);" 
+          />
+          <p class="caption"><strong>Figure 5: Illustration of AQI.</strong> Example of how AQI visualizes separation between safe and unsafe samples after alignment.</p>
+        </div>
+      </section>
+
+      <section id="results-main" class="section">
+        <h2 class="section-title">Quantitative Results</h2>
+        <div class="image-display mt-6">
+          <!-- <div style="text-align: center; padding: 2rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background-color: #f8fafc;"> -->
+             <img 
+            src="table 1.png" 
+            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+            style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.08);" 
+          />
+          <!-- </div> -->
+          <p class="caption"><strong>Table 1: Evaluation of DPO-Kernel Variants against Baselines.</strong> Metrics: Toxicity (↓), CMMD (↓), CLIP Score (↑), AQI (↑). DPO-Kernel (RBF+Rényi) shows superior results.</p>
+        </div>
+        <div class="image-display mt-4">
+           <img 
+            src="download (21).png" 
+            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
+            style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.08);" 
+          />
+          <p class="caption"><strong>Figure 6: AQI Heatmap across alignment axes.</strong> Darker shades denote higher alignment. Wavelet and RBF variants with Rényi show strong performance on Race and Disability.</p>
+        </div>
+      </section>
+
+      <section id="visual-examples" class="section">
+        <h2 class="section-title">Qualitative Results</h2>
+      </section>
+           <section id="bibtex" class="section">
+        <h2 class="section-title">BibTeX</h2>
+        <pre>
+@article{prasad2024detonate,
+  title={DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization},
+  author={Prasad, Renjith and Borah, Abhilekh and Abdullah, Hasnat Md and Shyalika, Chathurangi and Singh, Gurpreet and Garimella, Ritvik and Roy, Rajarshi and Surana, Harshul and Imanpour, Nasrin and Trivedy, Suranjana and Sheth, Amit and Das, Amitava},
+  journal={arXiv preprint arXiv:XXXX.XXXXX},
+  year={2025}
+}
+        </pre>
+        <p class="caption">Please cite our work if you use DETONATE or DPO-Kernels in your research.</p>
+      </section>
+    </main>
+  </div>
+
+</body>
+</html>
