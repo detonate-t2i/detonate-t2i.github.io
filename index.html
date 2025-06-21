@@ -571,13 +571,19 @@
       <section id="method-dpo-kernels" class="section">
         <h2 class="section-title">DPO-Kernels</h2>
         <p class="content-text">Direct extensions of DPO to T2I diffusion models falter due to reliance on scalar likelihoods, ignoring underlying semantic geometry. We introduce <strong>DPO-Kernels</strong>, a grounded extension of DPO that embeds alignment within the structure of a Reproducing Kernel Hilbert Space (RKHS). Unlike standard DPO, DPO-Kernels leverages kernel methods (Polynomial, RBF, Wavelet) to modulate updates via semantic proximity in embedding space, resulting in a smooth, geometry-aware preference function over latent manifolds. The choice of kernel (Polynomial, RBF, Wavelet) governs the inductive bias, shaping how alignment signals generalize. Polynomial kernels capture global nonlinear interactions. RBF kernels induce local smoothness and semantic clustering. Wavelet kernels combine spatial localization with frequency sensitivity, ideal for T2I alignment where fidelity varies across semantic scales.</p>
-        <div class="image-display">
-          <img 
-            src="download (18).png" 
-            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
-            style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.08);" 
-          />
-          <p class="caption"><strong>Figure 3: Effect of Kernelization on DPO Loss Landscapes.</strong> Illustrates how Vanilla DPO, Polynomial, RBF, and Wavelet kernels induce different alignment surfaces.</p>
+        <div class="viz-3d-container" id="kernel-3d-container">
+          <div class="viz-controls">
+            <button class="viz-control-btn active" onclick="switchKernel('vanilla')">Vanilla DPO</button>
+            <button class="viz-control-btn" onclick="switchKernel('polynomial')">Polynomial</button>
+            <button class="viz-control-btn" onclick="switchKernel('rbf')">RBF</button>
+            <button class="viz-control-btn" onclick="switchKernel('wavelet')">Wavelet</button>
+            <button class="viz-control-btn" onclick="toggleRotation()">⏸️ Pause</button>
+          </div>
+          <div class="viz-info-overlay" id="kernel-info">
+            <strong>Vanilla DPO</strong><br>
+            Loss Landscape: Standard alignment surface
+          </div>
+          <div id="kernel-plotly" class="plotly-container"></div>
         </div>
         <div class="image-display mt-8">
           <img 
