@@ -620,13 +620,18 @@
         <p class="content-text">
           AQI combines these scores to give a single value: higher AQI means safer and clearer separation in the model's latent space.
         </p>
-        <div class="image-display mt-6">
-          <img 
-            src="download (20).png" 
-            alt="DETONATE: A Benchmark for Text-to-Image Alignment and Kernelized Direct Preference Optimization" 
-            style="display: block; margin: 2rem auto; max-width: 1000px; width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.08);" 
-          />
-          <p class="caption"><strong>Figure 5: Illustration of AQI.</strong> Example of how AQI visualizes separation between safe and unsafe samples after alignment.</p>
+        <div class="viz-3d-container" id="aqi-3d-container">
+          <div class="viz-controls">
+            <button class="viz-control-btn active" onclick="switchAQIView('separation')">Cluster Separation</button>
+            <button class="viz-control-btn" onclick="switchAQIView('embedding')">Embedding Space</button>
+            <button class="viz-control-btn" onclick="switchAQIView('heatmap')">3D Heatmap</button>
+            <button class="viz-control-btn" onclick="toggleAQIRotation()">⏸️ Pause</button>
+          </div>
+          <div class="viz-info-overlay" id="aqi-info">
+            <strong>AQI Cluster Separation</strong><br>
+            Davies-Bouldin Score: 0.23 | Dunn Index: 2.87
+          </div>
+          <div id="aqi-plotly" class="plotly-container"></div>
         </div>
       </section>
 
