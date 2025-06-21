@@ -774,6 +774,583 @@ function moveSlide(direction) {
   // Update image source
   sliderImg.src = `${config.folder}/${config.prefix}${currentIndexes[section]}.png`;
 }
+
+// 3D Visualization Variables
+let kernelRotationId = null;
+let aqiRotationId = null;
+let heatmapRotationId = null;
+let isKernelRotating = true;
+let isAQIRotating = true;
+let isHeatmapRotating = true;
+
+// Kernel Loss Landscape Data Generator
+function generateKernelData(kernelType) {
+  const size = 50;
+  const data = [];
+  const x = [];
+  const y = [];
+  const z = [];
+  
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      const xVal = (i - size/2) / 10;
+      const yVal = (j - size/2) / 10;
+      let zVal = 0;
+      
+      switch(kernelType) {
+        case 'vanilla':
+          zVal = Math.exp(-(xVal*xVal + yVal*yVal)/2) + 0.3 * Math.sin(xVal) * Math.cos(yVal);
+          break;
+        case 'polynomial':
+          zVal = Math.pow(1 + xVal*yVal, 3) * Math.exp(-(xVal*xVal + yVal*yVal)/4) + 0.5;
+          break;
+        case 'rbf':
+          zVal = Math.exp(-2*(xVal*xVal + yVal*yVal)) + 0.5 * Math.exp(-((xVal-1)*(xVal-1) + (yVal-1)*(yVal-1))/2);
+          break;
+        case 'wavelet':
+          zVal = Math.cos(Math.sqrt(xVal*xVal + yVal*yVal) * 3) * Math.exp(-(xVal*xVal + yVal*yVal)/3) + 0.2 * Math.sin(xVal*2) * Math.sin(yVal*2);
+          break;
+      }
+      
+      x.push(xVal);
+      y.push(yVal);
+      z.push(zVal);
+    }
+  }
+  
+  return { x, y, z };
+}
+
+// AQI Data Generator
+function generateAQIData(viewType) {
+  switch(viewType) {
+    case 'separation':
+      return generateClusterSeparationData();
+    case 'embedding':
+      return generateEmbeddingData();
+    case 'heatmap':
+      return generateAQIHeatmapData();
+    default:
+      return generateClusterSeparationData();
+  }
+}
+
+function generateClusterSeparationData() {
+  const safePoints = [];
+  const unsafePoints = [];
+  
+  // Generate safe cluster (blue)
+  for (let i = 0; i < 100; i++) {
+    safePoints.push({
+      x: Math.random() * 4 - 2 + 3,
+      y: Math.random() * 4 - 2 + 2,
+      z: Math.random() * 3 - 1.5 + 1
+    });
+  }
+  
+  // Generate unsafe cluster (red)
+  for (let i = 0; i < 80; i++) {
+    unsafePoints.push({
+      x: Math.random() * 3 - 1.5 - 2,
+      y: Math.random() * 3 - 1.5 - 1,
+      z: Math.random() * 2 - 1 - 1
+    });
+  }
+  
+  return { safePoints, unsafePoints };
+}
+
+function generateEmbeddingData() {
+  const points = [];
+  const colors = [];
+  
+  for (let i = 0; i < 200; i++) {
+    const angle = (i / 200) * Math.PI * 4;
+    const radius = 3 + Math.sin(angle * 3) * 1.5;
+    points.push({
+      x: radius * Math.cos(angle) + (Math.random() - 0.5) * 0.5,
+      y: radius * Math.sin(angle) + (Math.random() - 0.5) * 0.5,
+      z: Math.sin(angle * 2) * 2 + (Math.random() - 0.5) * 0.3
+    });
+    colors.push(i < 100 ? 'Safe' : 'Unsafe');
+  }
+  
+  return { points, colors };
+}
+
+function generateAQIHeatmapData() {
+  const methods = ['Vanilla DPO', 'DPO-Kernel (Poly)', 'DPO-Kernel (RBF)', 'DPO-Kernel (Wavelet)', 'DDPO', 'SAFREE'];
+  const metrics = ['Davies-Bouldin', 'Dunn Index', 'Silhouette', 'Calinski-Harabasz'];
+  const axes = ['Race', 'Gender', 'Disability'];
+  
+  const data = [];
+  
+  for (let i = 0; i < methods.length; i++) {
+    for (let j = 0; j < metrics.length; j++) {
+      for (let k = 0; k < axes.length; k++) {
+        const value = Math.random() * 0.8 + 0.2 + (i === 2 ? 0.3 : 0); // RBF performs better
+        data.push({
+          method: methods[i],
+          metric: metrics[j],
+          axis: axes[k],
+          value: value,
+          x: i,
+          y: j,
+          z: k
+        });
+      }
+    }
+  }
+  
+  return data;
+}
+
+// Initialize Kernel Visualization
+function initKernelVisualization() {
+  const kernelData = generateKernelData('vanilla');
+  
+  const trace = {
+    x: kernelData.x,
+    y: kernelData.y,
+    z: kernelData.z,
+    type: 'scatter3d',
+    mode: 'markers',
+    marker: {
+      size: 3,
+      color: kernelData.z,
+      colorscale: 'Viridis',
+      showscale: true,
+      colorbar: {
+        title: 'Loss Value',
+        thickness: 15,
+        len: 0.7
+      }
+    },
+    hovertemplate: '<b>Loss Landscape</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Loss: %{z:.2f}<extra></extra>'
+  };
+  
+  const layout = {
+    scene: {
+      xaxis: { title: 'Semantic Dimension 1' },
+      yaxis: { title: 'Semantic Dimension 2' },
+      zaxis: { title: 'Loss Value' },
+      camera: {
+        eye: { x: 1.5, y: 1.5, z: 1.5 }
+      },
+      bgcolor: 'rgba(0,0,0,0)',
+    },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    showlegend: false
+  };
+  
+  const config = {
+    responsive: true,
+    displayModeBar: false
+  };
+  
+  Plotly.newPlot('kernel-plotly', [trace], layout, config);
+  
+  // Start rotation
+  startKernelRotation();
+}
+
+// Initialize AQI Visualization
+function initAQIVisualization() {
+  const aqiData = generateAQIData('separation');
+  
+  const safeTrace = {
+    x: aqiData.safePoints.map(p => p.x),
+    y: aqiData.safePoints.map(p => p.y),
+    z: aqiData.safePoints.map(p => p.z),
+    type: 'scatter3d',
+    mode: 'markers',
+    name: 'Safe Samples',
+    marker: {
+      size: 6,
+      color: '#3b82f6',
+      opacity: 0.8
+    },
+    hovertemplate: '<b>Safe Sample</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Z: %{z:.2f}<extra></extra>'
+  };
+  
+  const unsafeTrace = {
+    x: aqiData.unsafePoints.map(p => p.x),
+    y: aqiData.unsafePoints.map(p => p.y),
+    z: aqiData.unsafePoints.map(p => p.z),
+    type: 'scatter3d',
+    mode: 'markers',
+    name: 'Unsafe Samples',
+    marker: {
+      size: 6,
+      color: '#ef4444',
+      opacity: 0.8
+    },
+    hovertemplate: '<b>Unsafe Sample</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Z: %{z:.2f}<extra></extra>'
+  };
+  
+  const layout = {
+    scene: {
+      xaxis: { title: 'Embedding Dimension 1' },
+      yaxis: { title: 'Embedding Dimension 2' },
+      zaxis: { title: 'Embedding Dimension 3' },
+      camera: {
+        eye: { x: 1.8, y: 1.8, z: 1.2 }
+      },
+      bgcolor: 'rgba(0,0,0,0)',
+    },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    legend: {
+      x: 0.02,
+      y: 0.98,
+      bgcolor: 'rgba(255,255,255,0.8)',
+      bordercolor: 'rgba(0,0,0,0.2)',
+      borderwidth: 1
+    }
+  };
+  
+  const config = {
+    responsive: true,
+    displayModeBar: false
+  };
+  
+  Plotly.newPlot('aqi-plotly', [safeTrace, unsafeTrace], layout, config);
+  
+  // Start rotation
+  startAQIRotation();
+}
+
+// Initialize AQI Heatmap Visualization
+function initAQIHeatmapVisualization() {
+  const heatmapData = generateAQIHeatmapData();
+  
+  const trace = {
+    x: heatmapData.map(d => d.x),
+    y: heatmapData.map(d => d.y),
+    z: heatmapData.map(d => d.z),
+    type: 'scatter3d',
+    mode: 'markers',
+    marker: {
+      size: heatmapData.map(d => d.value * 15 + 5),
+      color: heatmapData.map(d => d.value),
+      colorscale: 'RdYlBu_r',
+      showscale: true,
+      colorbar: {
+        title: 'AQI Score',
+        thickness: 15,
+        len: 0.7
+      },
+      opacity: 0.8
+    },
+    text: heatmapData.map(d => `${d.method}<br>${d.metric}<br>${d.axis}<br>AQI: ${d.value.toFixed(3)}`),
+    hovertemplate: '%{text}<extra></extra>'
+  };
+  
+  const layout = {
+    scene: {
+      xaxis: { 
+        title: 'Method',
+        tickvals: [0, 1, 2, 3, 4, 5],
+        ticktext: ['Vanilla DPO', 'Poly', 'RBF', 'Wavelet', 'DDPO', 'SAFREE']
+      },
+      yaxis: { 
+        title: 'Metric',
+        tickvals: [0, 1, 2, 3],
+        ticktext: ['Davies-Bouldin', 'Dunn Index', 'Silhouette', 'Calinski-Harabasz']
+      },
+      zaxis: { 
+        title: 'Bias Axis',
+        tickvals: [0, 1, 2],
+        ticktext: ['Race', 'Gender', 'Disability']
+      },
+      camera: {
+        eye: { x: 2, y: 2, z: 1.5 }
+      },
+      bgcolor: 'rgba(0,0,0,0)',
+    },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    showlegend: false
+  };
+  
+  const config = {
+    responsive: true,
+    displayModeBar: false
+  };
+  
+  Plotly.newPlot('aqi-heatmap-plotly', [trace], layout, config);
+  
+  // Start rotation
+  startHeatmapRotation();
+}
+
+// Rotation Functions
+function startKernelRotation() {
+  if (!isKernelRotating) return;
+  
+  let angle = 0;
+  kernelRotationId = setInterval(() => {
+    if (!isKernelRotating) return;
+    
+    angle += 1;
+    const camera = {
+      eye: {
+        x: 2.5 * Math.cos(angle * Math.PI / 180),
+        y: 2.5 * Math.sin(angle * Math.PI / 180),
+        z: 1.5 + 0.5 * Math.sin(angle * Math.PI / 90)
+      }
+    };
+    
+    Plotly.relayout('kernel-plotly', {'scene.camera': camera});
+  }, 50);
+}
+
+function startAQIRotation() {
+  if (!isAQIRotating) return;
+  
+  let angle = 0;
+  aqiRotationId = setInterval(() => {
+    if (!isAQIRotating) return;
+    
+    angle += 0.8;
+    const camera = {
+      eye: {
+        x: 2.2 * Math.cos(angle * Math.PI / 180),
+        y: 2.2 * Math.sin(angle * Math.PI / 180),
+        z: 1.5 + 0.3 * Math.cos(angle * Math.PI / 120)
+      }
+    };
+    
+    Plotly.relayout('aqi-plotly', {'scene.camera': camera});
+  }, 60);
+}
+
+function startHeatmapRotation() {
+  if (!isHeatmapRotating) return;
+  
+  let angle = 0;
+  heatmapRotationId = setInterval(() => {
+    if (!isHeatmapRotating) return;
+    
+    angle += 0.6;
+    const camera = {
+      eye: {
+        x: 2.8 * Math.cos(angle * Math.PI / 180),
+        y: 2.8 * Math.sin(angle * Math.PI / 180),
+        z: 2 + 0.4 * Math.sin(angle * Math.PI / 100)
+      }
+    };
+    
+    Plotly.relayout('aqi-heatmap-plotly', {'scene.camera': camera});
+  }, 70);
+}
+
+// Control Functions
+function switchKernel(kernelType) {
+  // Update button states
+  document.querySelectorAll('#kernel-3d-container .viz-control-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // Update info overlay
+  const infoTexts = {
+    vanilla: { title: 'Vanilla DPO', desc: 'Loss Landscape: Standard alignment surface' },
+    polynomial: { title: 'Polynomial Kernel', desc: 'Loss Landscape: Global nonlinear interactions' },
+    rbf: { title: 'RBF Kernel', desc: 'Loss Landscape: Local smoothness and clustering' },
+    wavelet: { title: 'Wavelet Kernel', desc: 'Loss Landscape: Spatial-frequency sensitivity' }
+  };
+  
+  const info = infoTexts[kernelType];
+  document.getElementById('kernel-info').innerHTML = `<strong>${info.title}</strong><br>${info.desc}`;
+  
+  // Generate new data and update plot
+  const kernelData = generateKernelData(kernelType);
+  
+  const update = {
+    x: [kernelData.x],
+    y: [kernelData.y],
+    z: [kernelData.z],
+    'marker.color': [kernelData.z]
+  };
+  
+  Plotly.restyle('kernel-plotly', update, [0]);
+}
+
+function switchAQIView(viewType) {
+  // Update button states
+  document.querySelectorAll('#aqi-3d-container .viz-control-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // Update info overlay
+  const infoTexts = {
+    separation: { title: 'AQI Cluster Separation', desc: 'Davies-Bouldin Score: 0.23 | Dunn Index: 2.87' },
+    embedding: { title: 'AQI Embedding Space', desc: 'Semantic embedding visualization' },
+    heatmap: { title: 'AQI 3D Heatmap', desc: 'Multi-dimensional alignment quality' }
+  };
+  
+  const info = infoTexts[viewType];
+  document.getElementById('aqi-info').innerHTML = `<strong>${info.title}</strong><br>${info.desc}`;
+  
+  // Generate new data based on view type
+  if (viewType === 'embedding') {
+    const embeddingData = generateEmbeddingData();
+    
+    const safeTrace = {
+      x: embeddingData.points.filter((_, i) => embeddingData.colors[i] === 'Safe').map(p => p.x),
+      y: embeddingData.points.filter((_, i) => embeddingData.colors[i] === 'Safe').map(p => p.y),
+      z: embeddingData.points.filter((_, i) => embeddingData.colors[i] === 'Safe').map(p => p.z),
+      type: 'scatter3d',
+      mode: 'markers',
+      name: 'Safe Embeddings',
+      marker: { size: 5, color: '#10b981', opacity: 0.7 }
+    };
+    
+    const unsafeTrace = {
+      x: embeddingData.points.filter((_, i) => embeddingData.colors[i] === 'Unsafe').map(p => p.x),
+      y: embeddingData.points.filter((_, i) => embeddingData.colors[i] === 'Unsafe').map(p => p.y),
+      z: embeddingData.points.filter((_, i) => embeddingData.colors[i] === 'Unsafe').map(p => p.z),
+      type: 'scatter3d',
+      mode: 'markers',
+      name: 'Unsafe Embeddings',
+      marker: { size: 5, color: '#f59e0b', opacity: 0.7 }
+    };
+    
+    Plotly.react('aqi-plotly', [safeTrace, unsafeTrace]);
+  } else {
+    // Switch back to original separation view
+    const aqiData = generateAQIData('separation');
+    
+    const safeTrace = {
+      x: aqiData.safePoints.map(p => p.x),
+      y: aqiData.safePoints.map(p => p.y),
+      z: aqiData.safePoints.map(p => p.z),
+      type: 'scatter3d',
+      mode: 'markers',
+      name: 'Safe Samples',
+      marker: { size: 6, color: '#3b82f6', opacity: 0.8 }
+    };
+    
+    const unsafeTrace = {
+      x: aqiData.unsafePoints.map(p => p.x),
+      y: aqiData.unsafePoints.map(p => p.y),
+      z: aqiData.unsafePoints.map(p => p.z),
+      type: 'scatter3d',
+      mode: 'markers',
+      name: 'Unsafe Samples',
+      marker: { size: 6, color: '#ef4444', opacity: 0.8 }
+    };
+    
+    Plotly.react('aqi-plotly', [safeTrace, unsafeTrace]);
+  }
+}
+
+function toggleRotation() {
+  isKernelRotating = !isKernelRotating;
+  const btn = event.target;
+  
+  if (isKernelRotating) {
+    btn.innerHTML = '⏸️ Pause';
+    startKernelRotation();
+  } else {
+    btn.innerHTML = '▶️ Play';
+    if (kernelRotationId) {
+      clearInterval(kernelRotationId);
+      kernelRotationId = null;
+    }
+  }
+}
+
+function toggleAQIRotation() {
+  isAQIRotating = !isAQIRotating;
+  const btn = event.target;
+  
+  if (isAQIRotating) {
+    btn.innerHTML = '⏸️ Pause';
+    startAQIRotation();
+  } else {
+    btn.innerHTML = '▶️ Play';
+    if (aqiRotationId) {
+      clearInterval(aqiRotationId);
+      aqiRotationId = null;
+    }
+  }
+}
+
+function toggleHeatmapRotation() {
+  isHeatmapRotating = !isHeatmapRotating;
+  const btn = event.target;
+  
+  if (isHeatmapRotating) {
+    btn.innerHTML = '⏸️ Pause';
+    startHeatmapRotation();
+  } else {
+    btn.innerHTML = '▶️ Play';
+    if (heatmapRotationId) {
+      clearInterval(heatmapRotationId);
+      heatmapRotationId = null;
+    }
+  }
+}
+
+function switchHeatmapAxis(axis) {
+  // Update button states
+  document.querySelectorAll('#aqi-heatmap-3d-container .viz-control-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // Update info overlay
+  const infoTexts = {
+    race: 'AQI Heatmap - Race Axis',
+    disability: 'AQI Heatmap - Disability Axis',
+    gender: 'AQI Heatmap - Gender Axis',
+    all: 'AQI Heatmap - All Axes'
+  };
+  
+  document.getElementById('heatmap-info').innerHTML = `<strong>${infoTexts[axis]}</strong><br>Alignment Quality Index across different methods`;
+  
+  // Generate filtered data based on axis
+  let filteredData = generateAQIHeatmapData();
+  if (axis !== 'all') {
+    const axisMap = { race: 'Race', disability: 'Disability', gender: 'Gender' };
+    filteredData = filteredData.filter(d => d.axis === axisMap[axis]);
+  }
+  
+  const update = {
+    x: [filteredData.map(d => d.x)],
+    y: [filteredData.map(d => d.y)],
+    z: [filteredData.map(d => d.z)],
+    'marker.size': [filteredData.map(d => d.value * 15 + 5)],
+    'marker.color': [filteredData.map(d => d.value)],
+    text: [filteredData.map(d => `${d.method}<br>${d.metric}<br>${d.axis}<br>AQI: ${d.value.toFixed(3)}`)]
+  };
+  
+  Plotly.restyle('aqi-heatmap-plotly', update, [0]);
+}
+
+// Initialize all 3D visualizations when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  // Add a small delay to ensure Plotly is fully loaded
+  setTimeout(() => {
+    initKernelVisualization();
+    initAQIVisualization();
+    initAQIHeatmapVisualization();
+  }, 500);
+});
+
+// Clean up intervals when page unloads
+window.addEventListener('beforeunload', function() {
+  if (kernelRotationId) clearInterval(kernelRotationId);
+  if (aqiRotationId) clearInterval(aqiRotationId);
+  if (heatmapRotationId) clearInterval(heatmapRotationId);
+});
 </script>
 </body>
 </html>
